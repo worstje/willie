@@ -1,115 +1,114 @@
 #!/usr/bin/env python
 # coding=utf-8
 """
-calc.py - Phenny Calculator Module
-Copyright 2008, Sean B. Palmer, inamidst.com
+calc.py - jenni Calculator Module
+Copyright 2009-2013, Michael Yanovich (yanovich.net)
+Copyright 2008-2013, Sean B. Palmer (inamidst.com)
 Licensed under the Eiffel Forum License 2.
 
-http://inamidst.com/phenny/
+More info:
+ * jenni: https://github.com/myano/jenni/
+ * Phenny: http://inamidst.com/phenny/
 """
 
+import HTMLParser
 import re
+from socket import timeout
+import string
+from modules import unicode as uc
 import web
 
-r_result = re.compile(r'(?i)<A NAME=results>(.*?)</A>')
-r_tag = re.compile(r'<\S+.*?>')
 
-subs = [
-   (' in ', ' -> '), 
-   (' over ', ' / '), 
-   (u'£', 'GBP '), 
-   (u'€', 'EUR '), 
-   ('\$', 'USD '), 
-   (r'\bKB\b', 'kilobytes'), 
-   (r'\bMB\b', 'megabytes'), 
-   (r'\bGB\b', 'kilobytes'), 
-   ('kbps', '(kilobits / second)'), 
-   ('mbps', '(megabits / second)')
-]
-
-def calc(phenny, input): 
-   """Use the Frink online calculator."""
-   q = input.group(2)
-   if not q: 
-      return phenny.say('0?')
-
-   query = q[:]
-   for a, b in subs: 
-      query = re.sub(a, b, query)
-   query = query.rstrip(' \t')
-
-   precision = 5
-   if query[-3:] in ('GBP', 'USD', 'EUR', 'NOK'): 
-      precision = 2
-   query = web.urllib.quote(query.encode('utf-8'))
-
-   uri = 'http://futureboy.us/fsp/frink.fsp?fromVal='
-   bytes = web.get(uri + query)
-   m = r_result.search(bytes)
-   if m: 
-      result = m.group(1)
-      result = r_tag.sub('', result) # strip span.warning tags
-      result = result.replace('&gt;', '>')
-      result = result.replace('(undefined symbol)', '(?) ')
-
-      if '.' in result: 
-         try: result = str(round(float(result), precision))
-         except ValueError: pass
-
-      if not result.strip(): 
-         result = '?'
-      elif ' in ' in q: 
-         result += ' ' + q.split(' in ', 1)[1]
-
-      phenny.say(q + ' = ' + result[:350])
-   else: phenny.reply("Sorry, can't calculate that.")
-   phenny.say('Note that .calc is deprecated, consider using .c')
-calc.commands = ['calc']
-calc.example = '.calc 5 + 3'
-
-def c(phenny, input): 
-   """Google calculator."""
-   if not input.group(2):
-      return phenny.reply("Nothing to calculate.")
-   q = input.group(2).encode('utf-8')
-   q = q.replace('\xcf\x95', 'phi') # utf-8 U+03D5
-   q = q.replace('\xcf\x80', 'pi') # utf-8 U+03C0
-   uri = 'http://www.google.com/ig/calculator?q='
-   bytes = web.get(uri + web.urllib.quote(q))
-   parts = bytes.split('",')
-   answer = [p for p in parts if p.startswith('rhs: "')][0][6:]
-   if answer: 
-      answer = answer.decode('unicode-escape')
-      answer = ''.join(chr(ord(c)) for c in answer)
-      answer = answer.decode('utf-8')
-      answer = answer.replace(u'\xc2\xa0', ',')
-      answer = answer.replace('<sup>', '^(')
-      answer = answer.replace('</sup>', ')')
-      answer = web.decode(answer)
-      phenny.say(answer)
-   else: phenny.say('Sorry, no result.')
-c.commands = ['c']
+def c(jenni, input):
+    """.c -- Google calculator."""
+    if not input.group(2):
+        return jenni.reply('Nothing to calculate.')
+    q = input.group(2).encode('utf-8')
+    q = q.replace('\xcf\x95', 'phi')  # utf-8 U+03D5
+    q = q.replace('\xcf\x80', 'pi')  # utf-8 U+03C0
+    uri = 'https://www.google.com/ig/calculator?q='
+    bytes = web.get(uri + web.urllib.quote(q))
+    parts = bytes.split('",')
+    equation = [p for p in parts if p.startswith('{lhs: "')][0][7:]
+    answer = [p for p in parts if p.startswith('rhs: "')][0][6:]
+    if answer and equation:
+        answer = answer.decode('unicode-escape')
+        answer = ''.join(chr(ord(c)) for c in answer)
+        answer = uc.decode(answer)
+        answer = answer.replace(u'\xc2\xa0', ',')
+        answer = answer.replace('<sup>', '^(')
+        answer = answer.replace('</sup>', ')')
+        answer = web.decode(answer)
+        answer = answer.strip()
+        equation = uc.decode(equation)
+        equation = equation.strip()
+        max_len = 450 - len(answer) - 6
+        new_eq = equation
+        if len(new_eq) > max_len:
+            end = max_len - 10
+            new_eq = new_eq[:end]
+            new_eq += '[..]'
+        output = '\x02' + answer + '\x02' + ' == ' + new_eq
+        jenni.say(output)
+    else:
+        jenni.say('Sorry, no result.')
+c.commands = ['c', 'calc']
 c.example = '.c 5 + 3'
 
-def py(phenny, input): 
-   query = input.group(2).encode('utf-8')
-   uri = 'http://tumbolia.appspot.com/py/'
-   answer = web.get(uri + web.urllib.quote(query))
-   if answer: 
-      phenny.say(answer)
-   else: phenny.reply('Sorry, no result.')
-py.commands = ['py']
 
-def wa(phenny, input): 
-   if not input.group(2):
-      return phenny.reply("No search term.")
-   query = input.group(2).encode('utf-8')
-   uri = 'http://tumbolia.appspot.com/wa/'
-   answer = web.get(uri + web.urllib.quote(query.replace('+', '%2B')))
-   if answer: 
-      phenny.say(answer)
-   else: phenny.reply('Sorry, no result.')
-wa.commands = ['wa']
+def py(jenni, input):
+    """.py <code> -- evaluates python code"""
+    code = input.group(2)
+    if not code:
+        return jenni.reply('No code provided.')
+    query = code.encode('utf-8')
+    uri = 'https://tumbolia.appspot.com/py/'
+    try:
+        answer = web.get(uri + web.urllib.quote(query))
+        if answer is not None and answer != "\n":
+            jenni.say(answer)
+        else:
+            jenni.reply('Sorry, no result.')
+    except Exception, e:
+        jenni.reply('The server did not return an answer.')
+        print '[.py]', e
+py.commands = ['py', 'python']
+py.example = '.py print "Hello world, %s!" % ("James")'
 
-if __name__ == '__main__': 
-   print __doc__.strip()
+
+def wa(jenni, input):
+    """.wa <input> -- queries WolframAlpha with the given input."""
+    if not input.group(2):
+        return jenni.reply("No search term.")
+    query = input.group(2).encode('utf-8')
+    uri = 'https://tumbolia.appspot.com/wa/'
+    try:
+        answer = web.get(uri + web.urllib.quote(query.replace('+', '%2B')))
+    except timeout as e:
+        return jenni.reply("Request timd out")
+    if answer:
+        answer = answer.decode("string_escape")
+        answer = HTMLParser.HTMLParser().unescape(answer)
+        match = re.search('\\\:([0-9A-Fa-f]{4})', answer)
+        if match is not None:
+            char_code = match.group(1)
+            char = unichr(int(char_code, 16))
+            answer = answer.replace('\:' + char_code, char)
+        waOutputArray = string.split(answer, ";")
+        newOutput = list()
+        for each in waOutputArray:
+            temp = each.replace('\/', '/')
+            newOutput.append(temp)
+        waOutputArray = newOutput
+        if (len(waOutputArray) < 2):
+            jenni.reply(answer)
+        else:
+            jenni.reply(waOutputArray[0] + " = " + waOutputArray[1])
+        waOutputArray = list()
+    else:
+        jenni.reply('Sorry, no result from WolframAlpha.')
+wa.commands = ['wa', 'wolfram']
+wa.example = '.wa land area of the European Union'
+
+if __name__ == '__main__':
+    print __doc__.strip()
