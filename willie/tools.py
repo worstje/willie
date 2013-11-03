@@ -149,17 +149,23 @@ def get_command_regexp(prefix, command):
     return re.compile(pattern, re.IGNORECASE | re.VERBOSE)
 
 
+#Note that this will break things that are deprecated by willie. Since our main
+#goal in this branch is to test *Phenny* capability, though, this isn't too
+#much of an issue
 def deprecated(old):
-    def new(*args, **kwargs):
-        print >> sys.stderr, 'Function %s is deprecated.' % old.__name__
-        trace = traceback.extract_stack()
-        for line in traceback.format_list(trace[:-1]):
-            stderr(line[:-1])
-        return old(*args, **kwargs)
-    new.__doc__ = old.__doc__
-    new.__name__ = old.__name__
-    return new
+   def new(phenny, input, old=old):
+      self = phenny
+      origin = type('Origin', (object,), {
+         'sender': input.sender,
+         'nick': input.nick
+      })()
+      match = input.match
+      args = [input.bytes, input.sender, '@@']
 
+      old(self, origin, match, args)
+   new.__module__ = old.__module__
+   new.__name__ = old.__name__
+   return new
 
 class PriorityQueue(Queue.PriorityQueue):
     """A priority queue with a peek method."""

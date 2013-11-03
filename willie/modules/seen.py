@@ -1,60 +1,52 @@
-# -*- coding: utf8 -*-
+#!/usr/bin/env python
 """
-seen.py - Willie Seen Module
+seen.py - Phenny Seen Module
 Copyright 2008, Sean B. Palmer, inamidst.com
-Copyright © 2012, Elad Alfassa <elad@fedoraproject.org>
 Licensed under the Eiffel Forum License 2.
 
-http://willie.dftba.net
+http://inamidst.com/phenny/
 """
 
 import time
-import datetime
-import pytz
-from willie.tools import Ddict, Nick
-from willie.module import commands, rule, priority
+from tools import deprecated
 
-seen_dict = Ddict(dict)
+def seen(phenny, input): 
+   """.seen <nick> - Reports when <nick> was last seen."""
+   nick = input.group(2)
+   if not nick:
+      return phenny.reply("Need a nickname to search for...")
+   nick = nick.lower()
 
+   if not hasattr(phenny, 'seen'): 
+      return phenny.reply("?")
 
-def get_user_time(bot, nick):
-    tz = 'UTC'
-    tformat = None
-    if bot.db and nick in bot.db.preferences:
-            tz = bot.db.preferences.get(nick, 'tz') or 'UTC'
-            tformat = bot.db.preferences.get(nick, 'time_format')
-    if tz not in pytz.all_timezones_set:
-        tz = 'UTC'
-    return (pytz.timezone(tz.strip()), tformat or '%Y-%m-%d %H:%M:%S %Z')
+   if phenny.seen.has_key(nick): 
+      channel, t = phenny.seen[nick]
+      t = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(t))
 
+      msg = "I last saw %s at %s on %s" % (nick, t, channel)
+      phenny.reply(msg)
+   else: phenny.reply("Sorry, I haven't seen %s around." % nick)
+seen.rule = (['seen'], r'(\S+)')
 
-@commands('seen')
-def seen(bot, trigger):
-    """Reports when and where the user was last seen."""
-    if not trigger.group(2):
-        bot.say(".seen <nick> - Reports when <nick> was last seen.")
-        return
-    nick = Nick(trigger.group(2).strip())
-    if nick in seen_dict:
-        timestamp = seen_dict[nick]['timestamp']
-        channel = seen_dict[nick]['channel']
-        message = seen_dict[nick]['message']
+@deprecated
+def f_note(self, origin, match, args): 
+   def note(self, origin, match, args): 
+      if not hasattr(self.bot, 'seen'): 
+         self.bot.seen = {}
+      if origin.sender.startswith('#'): 
+         # if origin.sender == '#inamidst': return
+         self.seen[origin.nick.lower()] = (origin.sender, time.time())
 
-        tz, tformat = get_user_time(bot, trigger.nick)
-        saw = datetime.datetime.fromtimestamp(timestamp, tz)
-        timestamp = saw.strftime(tformat)
+      # if not hasattr(self, 'chanspeak'): 
+      #    self.chanspeak = {}
+      # if (len(args) > 2) and args[2].startswith('#'): 
+      #    self.chanspeak[args[2]] = args[0]
 
-        msg = "I last saw %s at %s on %s, saying %s" % (nick, timestamp, channel, message)
-        bot.say(str(trigger.nick) + ': ' + msg)
-    else:
-        bot.say("Sorry, I haven't seen %s around." % nick)
+   try: note(self, origin, match, args)
+   except Exception, e: print e
+f_note.rule = r'(.*)'
+f_note.priority = 'low'
 
-
-@rule('(.*)')
-@priority('low')
-def note(bot, trigger):
-    if trigger.sender.startswith('#'):
-        nick = Nick(trigger.nick)
-        seen_dict[nick]['timestamp'] = time.time()
-        seen_dict[nick]['channel'] = trigger.sender
-        seen_dict[nick]['message'] = trigger
+if __name__ == '__main__': 
+   print __doc__.strip()

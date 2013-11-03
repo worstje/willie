@@ -1,30 +1,23 @@
+#!/usr/bin/env python
 """
-ping.py - Willie Ping Module
+ping.py - Phenny Ping Module
 Author: Sean B. Palmer, inamidst.com
-About: http://willie.dftba.net
+About: http://inamidst.com/phenny/
 """
 
 import random
-from willie.module import rule, priority, thread
 
+def hello(phenny, input): 
+   greeting = random.choice(('Hi', 'Hey', 'Hello'))
+   punctuation = random.choice(('', '!'))
+   phenny.say(greeting + ' ' + input.nick + punctuation)
+hello.rule = r'(?i)(hi|hello|hey) $nickname[ \t]*$'
 
-@rule(r'(?i)(hi|hello|hey) $nickname[ \t]*$')
-def hello(bot, trigger):
-    if trigger.owner:
-        greeting = random.choice(('Fuck off,', 'Screw you,', 'Go away'))
-    else:
-        greeting = random.choice(('Hi', 'Hey', 'Hello'))
-    punctuation = random.choice(('', '!'))
-    bot.say(greeting + ' ' + trigger.nick + punctuation)
+def interjection(phenny, input): 
+   phenny.say(input.nick + '!')
+interjection.rule = r'$nickname!'
+interjection.priority = 'high'
+interjection.thread = False
 
-
-@rule(r'(?i)(Fuck|Screw) you, $nickname[ \t]*$')
-def rude(bot, trigger):
-    bot.say('Watch your mouth, ' + trigger.nick + ', or I\'ll tell your mother!')
-
-
-@rule('$nickname!')
-@priority('high')
-@thread(False)
-def interjection(bot, trigger):
-    bot.say(trigger.nick + '!')
+if __name__ == '__main__': 
+   print __doc__.strip()
