@@ -54,6 +54,12 @@ if sys.version_info.major >= 3:
     unicode = str
     basestring = str
 
+# A colon (':') was chosen over a period ('.') because existing configurations
+# out there could potentially have a strange setup where the working directory
+# _is_ supposed to be the home directory. (It also lessens confusion and edge
+# cases where willie might be running on a file in the current directory.)
+HOMEDIR_AT_FILE_LOCATION = ":"
+
 class ConfigurationError(Exception):
     """ Exception type for configuration errors """
 
@@ -119,15 +125,43 @@ class Config(object):
                 self.parser.set('core', 'verify_ssl', 'True')
             if not self.parser.has_option('core', 'timeout'):
                 self.parser.set('core', 'timeout', '120')
+
+            # Fix the ":" special value for homedir before anyone uses it.
+            if self.parser.has_option('core', 'homedir'):
+                if self.parser.get('core', 'homedir') == HOMEDIR_AT_FILE_LOCATION:
+                    self.parser.set('core', 'homedir', os.path.dirname(self.filename))
         else:
             self.parser.add_section('core')
 
     def save(self):
         """Save all changes to the config file."""
+
+        saved_homedir = None
+        if parser.has_option('core', 'homedir'):
+            saved_homedir = parser.get('core', 'homedir')
+            dirname = os.path.dirname
+            abspath = os.path.abspath
+            if (saved_homedir == dirname(self.filename)) or \
+               (saved_homedir == dirname(abspath(self.filename))):
+                # If the path of the configuration file matches the location
+                # of the configuration file, save it as ':' to avoid writing
+                # an absolute path for its own location.
+                parser.set('core', 'homedir', HOMEDIR_AT_FILE_LOCATION)
+
         cfgfile = open(self.filename, 'w')
         self.parser.write(cfgfile)
         cfgfile.flush()
         cfgfile.close()
+
+        if saved_homedir is not None:
+            # In case of wizard or runtime modification, the homedir
+            # may have been set to ":" which won't work for live usage.
+            # Live modification of the config file  is technically not
+            # supported, but since we're fixing stuff up anyway, we may
+            # as well do a good job at it. :-)
+            if saved_homedir == HOMEDIR_AT_FILE_LOCATION:
+                saved_homedir = os.path.dirname(self.filename)
+            parser.set('core', 'homedir', saved_homedir)
 
     def add_section(self, name):
         """Add a section to the config file.
